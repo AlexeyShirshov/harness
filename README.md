@@ -84,3 +84,7 @@ ollama pull llama3
 
 - Оllama на GitHub: https://github.com/ollama/ollama
 - Документация: https://ollama.ai/docs
+
+## 📄 Лицензия
+
+Проект распространяется по лицензии [MIT](LICENSE).
