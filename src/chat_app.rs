@@ -1,5 +1,4 @@
 use std::io::{stdin, Write};
-use chrono::Local;
 
 use crate::tools::registry;
 
@@ -8,12 +7,12 @@ use serde_json::Value;
 use serde_json::json;
 
 pub fn run_chat_app() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new();
+    let http_client = Client::new();
 
     println!("Ollama Local Connection\n");
     println!("Fetching models from Ollama API (/api/tags)...");
 
-    let models = match client.get("http://localhost:11434/api/tags").send() {
+    let models = match http_client.get("http://localhost:11434/api/tags").send() {
         Ok(res) if res.status().is_success() => {
             let text = res.text().unwrap_or_default();
             if let Ok(Value::Object(map)) = serde_json::from_str(&text) {
@@ -41,14 +40,13 @@ pub fn run_chat_app() -> Result<(), Box<dyn std::error::Error>> {
 
     let idx = show_models(&models)?;
     let model_name = models[idx].clone();
-    run_chat_loop(&client, &model_name)?;
+    run_chat_loop(&http_client, &model_name)?;
 
     Ok(())
 }
 
 fn default_models() -> Vec<String> {
     vec![
-        "gpt-oss:20b-base".into(),
         "qwen2.5-coder:14b-24k".into(),
         "gpt-oss:20b-48k".into(),
         "qwen3.5:9b-128k".into(),
@@ -93,11 +91,6 @@ fn run_chat_loop(client: &Client, model_name: &str) -> Result<(), Box<dyn std::e
         let mut user_inp = String::new();
         stdin().read_line(&mut user_inp)?;
         let prompt = user_inp.trim();
-        if prompt.to_lowercase().contains("сколько") && prompt.to_lowercase().contains("время") {
-            let now = Local::now().format("%H:%M:%S").to_string();
-            println!("Текущее время: {}", now);
-            continue;
-        }
         if prompt.eq_ignore_ascii_case("exit") || prompt.eq_ignore_ascii_case("выход") {
             println!("\nGood bye!");
             break;
