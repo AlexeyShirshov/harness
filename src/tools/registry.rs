@@ -1,32 +1,28 @@
-use std::sync::{Mutex, Arc};
-use lazy_static::lazy_static;
-use crate::tools::tool::Tool;
+use std::sync::{Arc, Mutex, OnceLock};
 
-lazy_static! {
-    static ref TOOLS: Mutex<Vec<Arc<dyn Tool + Send + Sync>>> = Mutex::new(Vec::new());
+use crate::tools::tool;
+use crate::tools::get_time_tool::GetTimeTool;
+use crate::tools::get_local_timezone_tool::GetLocalTimeZoneTool;
+use crate::tools::get_env_tool::GetEnvTool;
+
+static TOOLS: OnceLock<Mutex<Vec<Arc<dyn tool::Tool + Send + Sync>>>> = OnceLock::new();
+
+fn init_tools() -> Mutex<Vec<Arc<dyn tool::Tool + Send + Sync>>> {
+    let env = Arc::new(GetEnvTool) as Arc<dyn tool::Tool + Send + Sync>;
+    let time_tool = Arc::new(GetTimeTool) as Arc<dyn tool::Tool + Send + Sync>;
+    let tz_tool = Arc::new(GetLocalTimeZoneTool) as Arc<dyn tool::Tool + Send + Sync>;
+
+    Mutex::new(vec![env, time_tool, tz_tool])
 }
 
-/// Register a new tool.
-pub fn register_tool(tool: Arc<dyn Tool + Send + Sync>) {
-    TOOLS.lock().unwrap().push(tool);
+/// Get a tool by name.
+pub fn get_tool(name: &str) -> Option<Arc<dyn tool::Tool + Send + Sync>> {
+    let tools = TOOLS.get_or_init(init_tools);
+    tools.lock().unwrap().iter().find(|t| t.name() == name).cloned()
 }
 
-/// Retrieve a tool by name. Returns None if not found.
-pub fn get_tool(name: &str) -> Option<Arc<dyn Tool + Send + Sync>> {
-    for t in TOOLS.lock().unwrap().iter() {
-        if t.name() == name {
-            return Some(t.clone());
-        }
-    }
-    None
-}
-
-/// Convenience to list all tool names.
+/// List all registered tool names.
 pub fn list_tool_names() -> Vec<String> {
-    TOOLS
-        .lock()
-        .unwrap()
-        .iter()
-        .map(|t| t.name().to_string())
-        .collect()
+    let tools = TOOLS.get_or_init(init_tools);
+    tools.lock().unwrap().iter().map(|t| t.name().to_string()).collect()
 }

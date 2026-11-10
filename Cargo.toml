@@ -3,14 +3,8 @@ name = "ollama-project"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "ollama-project"
-path = "src/main.rs"
-
 [dependencies]
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 serde = { version = "1.0", features = ["derive"] }
-reqwest = { version = "0.11", features = ["json", "blocking"] }
 serde_json = "1.0"
-lazy_static = "1.4"
 chrono = "0.4"
-
