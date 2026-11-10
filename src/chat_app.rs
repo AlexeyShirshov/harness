@@ -83,28 +83,11 @@ fn show_models(models: &[String]) -> Result<usize, Box<dyn std::error::Error>> {
     Ok(idx)
 }
 
+const SYSTEM_PROMPT: &str = "Ты локальный ассистент с доступом к инструментам. \
+Помни предыдущие сообщения диалога и учитывай их в ответах.";
+
 fn run_chat_loop(client: &Client, model_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-    loop {
-        print!(">>> ");
-        std::io::stdout().flush().unwrap();
-
-        let mut user_inp = String::new();
-        stdin().read_line(&mut user_inp)?;
-        let prompt = user_inp.trim();
-        if prompt.eq_ignore_ascii_case("exit") || prompt.eq_ignore_ascii_case("выход") {
-            println!("\nGood bye!");
-            break;
-        }
-
-        let resp = chat_with_tools(client, model_name, prompt);
-        println!("{}", resp);
-        println!("==========");
-    }
-    Ok(())
-}
-
-fn chat_with_tools(client: &Client, model: &str, prompt: &str) -> String {
-    // Build tool list from registry
+    // Build tool list from registry once and reuse it for every request
     let tool_names = registry::list_tool_names();
     let tools_json: Vec<serde_json::Value> = tool_names
         .iter()
@@ -122,12 +105,43 @@ fn chat_with_tools(client: &Client, model: &str, prompt: &str) -> String {
         })
         .collect();
 
-    let mut messages = vec![json!({"role": "user", "content": prompt})];
+    // Full conversation history, kept for the whole session
+    let mut messages: Vec<Value> = vec![json!({"role": "system", "content": SYSTEM_PROMPT})];
 
+    loop {
+        print!(">>> ");
+        std::io::stdout().flush().unwrap();
+
+        let mut user_inp = String::new();
+        stdin().read_line(&mut user_inp)?;
+        let prompt = user_inp.trim();
+        if prompt.eq_ignore_ascii_case("exit") || prompt.eq_ignore_ascii_case("выход") {
+            println!("\nGood bye!");
+            break;
+        }
+        if prompt.is_empty() {
+            continue;
+        }
+
+        messages.push(json!({"role": "user", "content": prompt}));
+
+        let resp = chat_with_tools(client, model_name, &mut messages, &tools_json);
+        println!("{}", resp);
+        println!("==========");
+    }
+    Ok(())
+}
+
+fn chat_with_tools(
+    client: &Client,
+    model: &str,
+    messages: &mut Vec<Value>,
+    tools_json: &[Value],
+) -> String {
     for _ in 0..5 {
         let body = json!({
             "model": model,
-            "messages": messages,
+            "messages": &messages[..],
             "tools": tools_json,
             "stream": false,
         });
@@ -139,11 +153,14 @@ fn chat_with_tools(client: &Client, model: &str, prompt: &str) -> String {
         {
             Ok(r) if r.status().is_success() => r.text().unwrap_or_default(),
             Ok(r) => return format!("API Error: {}", r.status()),
-            Err(_) => return format!("🤖 {} MODE (offline)", model),
+            Err(e) => return format!("🤖 {} MODE (offline): {}", model, e),
         };
 
         let v: serde_json::Value = serde_json::from_str(&resp).unwrap_or_default();
-        let msg = v.get("message").cloned().unwrap_or_default();
+        let mut msg = v.get("message").cloned().unwrap_or_default();
+        if msg.get("role").is_none() {
+            msg["role"] = json!("assistant");
+        }
 
         // If model requested tool calls, execute them
         if let Some(calls) = msg.get("tool_calls").and_then(|c| c.as_array()) {
@@ -170,14 +187,20 @@ fn chat_with_tools(client: &Client, model: &str, prompt: &str) -> String {
                     format!("Unknown tool: {}", name)
                 };
 
-                messages.push(json!({"role": "tool", "content": result}));
+                messages.push(json!({
+                    "role": "tool",
+                    "tool_name": name,
+                    "content": result,
+                }));
             }
             continue;
         }
 
         // Otherwise return the content
         if let Some(content) = msg.get("content").and_then(|c| c.as_str()) {
-            return content.to_string();
+            let answer = content.to_string();
+            messages.push(json!({"role": "assistant", "content": answer.clone()}));
+            return answer;
         }
         return resp;
     }
