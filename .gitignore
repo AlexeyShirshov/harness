@@ -1,8 +1,8 @@
 # Build artifacts
 target/
 
-# Environment variables
-.env.example
+# Environment variables (шаблон .env.example, наоборот, хранится в репозитории)
+.env
 
 # IDE configuration
 .openidea/
