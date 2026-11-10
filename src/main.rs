@@ -1,8 +1,19 @@
-mod chat_app;
+mod tools;
 
 use std::error::Error;
+use std::sync::Arc;
+use crate::tools::registry::register_tool;
+use crate::tools::get_time_tool::GetTimeTool;
+use crate::tools::get_local_timezone_tool::GetLocalTimeZoneTool;
+mod chat_app;
+// use crate::chat_app;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Register the get_time tool
+    register_tool(Arc::new(GetTimeTool));
+    // Register the get_local_timezone tool
+    register_tool(Arc::new(GetLocalTimeZoneTool));
+
     println!("Ollama Local Connection");
     println!("-----------------------");
 
